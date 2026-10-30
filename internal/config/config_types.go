@@ -202,6 +202,55 @@ type DevinConfig struct {
 	SensitiveWords []string `yaml:"sensitive-words,omitempty" json:"sensitive-words,omitempty"`
 }
 
+// WorkBuddyConfig configures the WorkBuddy (CodeBuddy CN) provider and its
+// scheduled account tasks.
+type WorkBuddyConfig struct {
+	// Enabled enables WorkBuddy scheduled tasks.
+	Enabled bool `yaml:"enabled" json:"enabled"`
+	// StateDir overrides the task state directory. Empty means <auth-dir>/workbuddy-state.
+	StateDir string `yaml:"state-dir" json:"state-dir"`
+	// Workers is the maximum number of accounts processed concurrently.
+	// Zero means the default worker count.
+	Workers int `yaml:"workers" json:"workers"`
+	// RequestTimeout bounds non-chat task HTTP calls (for example "30s").
+	RequestTimeout string `yaml:"request-timeout" json:"request-timeout"`
+	// Timezone is the IANA timezone used to evaluate daily task windows.
+	Timezone string `yaml:"timezone" json:"timezone"`
+	// Tasks configures the individual scheduled tasks.
+	Tasks WorkBuddyTasksConfig `yaml:"tasks" json:"tasks"`
+}
+
+// WorkBuddyTasksConfig groups the per-task WorkBuddy schedules.
+type WorkBuddyTasksConfig struct {
+	Checkin      WorkBuddyTaskConfig `yaml:"checkin,omitempty" json:"checkin,omitempty"`
+	Balance      WorkBuddyTaskConfig `yaml:"balance,omitempty" json:"balance,omitempty"`
+	Keepalive    WorkBuddyTaskConfig `yaml:"keepalive,omitempty" json:"keepalive,omitempty"`
+	Report       WorkBuddyTaskConfig `yaml:"report,omitempty" json:"report,omitempty"`
+	Growth       WorkBuddyTaskConfig `yaml:"growth,omitempty" json:"growth,omitempty"`
+	Travel       WorkBuddyTaskConfig `yaml:"travel,omitempty" json:"travel,omitempty"`
+	NightOwl     WorkBuddyTaskConfig `yaml:"night-owl,omitempty" json:"night-owl,omitempty"`
+	Sweep        WorkBuddyTaskConfig `yaml:"sweep,omitempty" json:"sweep,omitempty"`
+	Compensation WorkBuddyTaskConfig `yaml:"compensation,omitempty" json:"compensation,omitempty"`
+	Streak       WorkBuddyTaskConfig `yaml:"streak,omitempty" json:"streak,omitempty"`
+}
+
+// WorkBuddyTaskConfig configures a single WorkBuddy scheduled task.
+type WorkBuddyTaskConfig struct {
+	// Enabled explicitly enables or disables the task. An unset value means enabled.
+	Enabled *bool `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+	// Interval is the repeat interval (for example "6h"). Empty means not interval-driven.
+	Interval string `yaml:"interval,omitempty" json:"interval,omitempty"`
+	// DailyAt is the local HH:MM time for daily tasks. Empty means not daily-driven.
+	DailyAt string `yaml:"daily-at,omitempty" json:"daily-at,omitempty"`
+	// Timeout bounds a single task run (for example "30s").
+	Timeout string `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+}
+
+// IsEnabled reports whether the task is enabled. An unset value defaults to enabled.
+func (c WorkBuddyTaskConfig) IsEnabled() bool {
+	return c.Enabled == nil || *c.Enabled
+}
+
 // AntigravityConfig configures provider-wide Antigravity request behavior.
 type AntigravityConfig struct {
 	// SensitiveWords is a list of words to obfuscate with zero-width characters in system instructions.

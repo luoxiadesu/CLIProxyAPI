@@ -249,7 +249,7 @@ func (h *Handler) StartOAuthV8(c *gin.Context) {
 
 	c.Set(oauthSessionProviderContextKey, provider)
 
-	switch strings.ToLower(strings.TrimSpace(provider)) {
+	switch normalizeStartOAuthProvider(provider) {
 	case "":
 		c.JSON(http.StatusBadRequest, gin.H{"error": "provider is required"})
 	case "claude":
@@ -268,11 +268,23 @@ func (h *Handler) StartOAuthV8(c *gin.Context) {
 		h.RequestDevinToken(c)
 	case "meta":
 		h.RequestMetaToken(c)
+	case "workbuddy":
+		h.RequestWorkBuddyToken(c)
 	default:
 		if !h.ServePluginAuthURL(c) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "provider_not_found"})
 		}
 	}
+}
+
+// normalizeStartOAuthProvider maps built-in provider aliases accepted by the
+// auth-url dispatcher to their canonical key.
+func normalizeStartOAuthProvider(provider string) string {
+	normalized := strings.ToLower(strings.TrimSpace(provider))
+	if normalized == "work-buddy" {
+		return "workbuddy"
+	}
+	return normalized
 }
 
 // ImportOAuthV8 dispatches credential import using the provider query parameter.

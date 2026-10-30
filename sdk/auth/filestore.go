@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	workbuddyauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/workbuddy"
 	cliproxyauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
 )
@@ -245,6 +246,8 @@ func (s *FileTokenStore) readAuthFiles(path, baseDir string) ([]*cliproxyauth.Au
 	if err = json.Unmarshal(data, &metadata); err != nil {
 		return nil, fmt.Errorf("unmarshal auth json: %w", err)
 	}
+	// Normalize panel-style WorkBuddy credentials before the provider is read.
+	metadata = workbuddyauth.NormalizeAuthFileMetadata(metadata, filepath.Base(path))
 	cliproxyauth.NormalizeCredentialMetadata(metadata)
 	if errWeight := cliproxyauth.ValidateAuthWeight(&cliproxyauth.Auth{Metadata: metadata}); errWeight != nil {
 		return nil, errWeight
@@ -362,6 +365,11 @@ func (s *FileTokenStore) readAuthFiles(path, baseDir string) ([]*cliproxyauth.Au
 	}
 	if email, ok := metadata["email"].(string); ok && email != "" {
 		auth.Attributes["email"] = email
+	}
+	// For WorkBuddy auth files, backfill identity and endpoint attributes from
+	// the normalized metadata.
+	if strings.EqualFold(provider, workbuddyauth.Provider) {
+		workbuddyauth.ApplyAuthAttributes(auth)
 	}
 	cliproxyauth.ApplyCustomHeadersFromMetadata(auth)
 	return []*cliproxyauth.Auth{auth}, nil

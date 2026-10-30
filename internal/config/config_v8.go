@@ -283,7 +283,14 @@ func (cfg *Config) UnmarshalYAML(node *yaml.Node) error {
 	if errValidate := decoded.Models.Validate(); errValidate != nil {
 		return errValidate
 	}
-	*cfg = Config(decoded)
+	next := Config(decoded)
+	// Validate the operator-provided values before defaults are filled in, so the
+	// built-in timezone default never depends on host tzdata being available.
+	if errValidate := next.WorkBuddy.Validate(); errValidate != nil {
+		return errValidate
+	}
+	next.NormalizeWorkBuddyConfig()
+	*cfg = next
 	cfg.SyncServerResponseCompression()
 	cfg.OAuthOnlyFields = nil
 	source := expandConfigAliases(node)
@@ -605,7 +612,9 @@ func IsV8ConfigLayout(root *yaml.Node) bool {
 }
 
 func v8AllowedRoots() map[string]bool {
-	allowed := map[string]bool{"models": true, "config-version": true, "api-keys": true, "plugins": true, "quota-exceeded": true, "client": true}
+	// Native v8 sections live at their runtime path and therefore have no
+	// buildV8Paths prefix mapping. workbuddy is a new v8-only section.
+	allowed := map[string]bool{"models": true, "config-version": true, "api-keys": true, "plugins": true, "quota-exceeded": true, "client": true, "workbuddy": true}
 	for _, path := range v8Paths {
 		section, _, _ := strings.Cut(path.current, ".")
 		allowed[section] = true
@@ -944,6 +953,9 @@ func ValidateV8Config(data []byte) error {
 	var cfg legacyConfig
 	if errDecode := decoder.Decode(&cfg); errDecode != nil {
 		return errDecode
+	}
+	if errValidate := Config(cfg).WorkBuddy.Validate(); errValidate != nil {
+		return errValidate
 	}
 	return cfg.Models.Validate()
 }

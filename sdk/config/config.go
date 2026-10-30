@@ -12,6 +12,10 @@ type Config = internalconfig.Config
 
 type ModelCatalogs = internalconfig.ModelCatalogs
 
+type WorkBuddyConfig = internalconfig.WorkBuddyConfig
+type WorkBuddyTasksConfig = internalconfig.WorkBuddyTasksConfig
+type WorkBuddyTaskConfig = internalconfig.WorkBuddyTaskConfig
+
 type ClientConfig = internalconfig.ClientConfig
 type CodexClientConfig = internalconfig.CodexClientConfig
 type CodexWebSearchResultCacheConfig = internalconfig.CodexWebSearchResultCacheConfig

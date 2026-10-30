@@ -37,6 +37,7 @@ type staticModelsJSON struct {
 	XAI         []*ModelInfo `json:"xai"`
 	Devin       []*ModelInfo `json:"devin"`
 	Meta        []*ModelInfo `json:"meta"`
+	WorkBuddy   []*ModelInfo `json:"workbuddy"`
 }
 
 // GetClaudeModels returns the standard Claude model definitions.
@@ -533,6 +534,8 @@ func GetStaticModelDefinitionsByChannel(channel string) []*ModelInfo {
 		return GetDevinModels()
 	case "meta", "muse":
 		return GetMetaModels()
+	case "workbuddy":
+		return GetWorkBuddyModels()
 	default:
 		return nil
 	}
@@ -568,6 +571,11 @@ func GetMetaModels() []*ModelInfo {
 	return cloneModelInfos(getModels().Meta)
 }
 
+// GetWorkBuddyModels returns the WorkBuddy (CodeBuddy CN) model definitions.
+func GetWorkBuddyModels() []*ModelInfo {
+	return cloneModelInfos(getModels().WorkBuddy)
+}
+
 // LookupStaticModelInfo searches all static model definitions for a model by ID.
 // Returns nil if no matching model is found.
 func LookupStaticModelInfo(modelID string) *ModelInfo {
@@ -576,6 +584,9 @@ func LookupStaticModelInfo(modelID string) *ModelInfo {
 	}
 
 	data := getModels()
+	// WorkBuddy model IDs overlap with other providers' catalogs (for example
+	// deepseek-v4-pro), so keep them out of the provider-agnostic fallback.
+	// WorkBuddy registration uses GetWorkBuddyModels directly.
 	allModels := [][]*ModelInfo{
 		data.Claude,
 		data.Gemini,

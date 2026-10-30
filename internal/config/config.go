@@ -137,6 +137,10 @@ type Config struct {
 	// Devin configures provider-wide Devin request behavior.
 	Devin DevinConfig `yaml:"devin" json:"devin"`
 
+	// WorkBuddy configures the WorkBuddy (CodeBuddy CN) provider and scheduled tasks.
+	// omitempty keeps an unconfigured section out of saved config files.
+	WorkBuddy WorkBuddyConfig `yaml:"workbuddy,omitempty" json:"workbuddy"`
+
 	// GeminiKey defines Gemini API key configurations with optional routing overrides.
 	GeminiKey []GeminiKey `yaml:"gemini-api-key" json:"gemini-api-key"`
 

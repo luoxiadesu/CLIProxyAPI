@@ -101,6 +101,7 @@ func (s *Service) Run(ctx context.Context) error {
 		interval := 15 * time.Minute
 		s.coreManager.StartAutoRefresh(ctx, interval)
 		log.Infof("core auth auto-refresh started (interval=%s)", interval)
+		s.startWorkBuddyTasks(ctx, cfg)
 	}
 
 	if !homeEnabled {
@@ -321,6 +322,7 @@ func (s *Service) Shutdown(ctx context.Context) error {
 		s.cfgMu.RLock()
 		watcherCancel := s.watcherCancel
 		s.cfgMu.RUnlock()
+		s.stopWorkBuddyTasks(ctx)
 		if watcherCancel != nil {
 			watcherCancel()
 		}

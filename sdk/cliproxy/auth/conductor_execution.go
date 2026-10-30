@@ -436,6 +436,8 @@ func requestToFormat(provider string, executor ProviderExecutor, req cliproxyexe
 		return sdktranslator.FormatAntigravity
 	case "devin":
 		return sdktranslator.FormatInteractions
+	case "workbuddy":
+		return sdktranslator.FormatOpenAI
 	default:
 		return sdktranslator.FormatOpenAI
 	}

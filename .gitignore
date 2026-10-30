@@ -5,6 +5,7 @@ cli-proxy-api
 # Configuration
 config.yaml
 .env
+.cloudflare/
 
 # Generated content
 bin/*
@@ -31,6 +32,7 @@ auths/*
 # Documentation
 docs/*
 !docs/management-api-v8.md
+!docs/workbuddy.md
 AGENTS.md
 CLAUDE.md
 GEMINI.md

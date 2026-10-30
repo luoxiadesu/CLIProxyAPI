@@ -12,6 +12,7 @@ import (
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/home"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/homeplugins"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/pluginhost"
+	"github.com/router-for-me/CLIProxyAPI/v8/internal/tasks"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/watcher"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/wsrelay"
 	sdkaccess "github.com/router-for-me/CLIProxyAPI/v8/sdk/access"
@@ -98,6 +99,13 @@ type Service struct {
 
 	// cooldownStateStore persists runtime cooldown state when enabled.
 	cooldownStateStore coreauth.CooldownStateStore
+
+	// workbuddyTasksMu guards the WorkBuddy task scheduler lifecycle fields.
+	workbuddyTasksMu sync.Mutex
+	// workbuddyTasks runs scheduled WorkBuddy account tasks when enabled.
+	workbuddyTasks *tasks.Scheduler
+	// workbuddyRunCtx is the service context that owns the scheduler.
+	workbuddyRunCtx context.Context
 
 	// pluginHost owns dynamic plugin lifecycle and runtime capability adapters.
 	pluginHost *pluginhost.Host

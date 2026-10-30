@@ -30,6 +30,7 @@ func newDefaultAuthManager() *sdkAuth.Manager {
 		sdkAuth.NewXAIAuthenticator(),
 		sdkAuth.NewDevinAuthenticator(),
 		sdkAuth.NewMetaAuthenticator(),
+		sdkAuth.NewWorkBuddyAuthenticator(),
 	)
 }
 
@@ -98,10 +99,32 @@ func (s *Service) handleAuthUpdate(ctx context.Context, update watcher.AuthUpdat
 	s.handleAuthUpdates(ctx, []watcher.AuthUpdate{update})
 }
 
+// authUpdatesTouchWorkBuddy reports whether an auth update may change the set
+// of WorkBuddy accounts. Deletes wake unconditionally because the removed
+// auth's provider is no longer available from the update payload.
+func authUpdatesTouchWorkBuddy(updates []watcher.AuthUpdate) bool {
+	for _, update := range updates {
+		if update.Action == watcher.AuthUpdateActionDelete {
+			return true
+		}
+		if update.Auth != nil && strings.EqualFold(strings.TrimSpace(update.Auth.Provider), "workbuddy") {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Service) handleAuthUpdates(ctx context.Context, updates []watcher.AuthUpdate) {
 	if s == nil {
 		return
 	}
+	// Auth updates can add or remove WorkBuddy accounts; wake the task scheduler
+	// so it rebuilds without waiting for a restart or a config change.
+	defer func() {
+		if authUpdatesTouchWorkBuddy(updates) {
+			s.wakeWorkBuddyTasks()
+		}
+	}()
 	// Keep this path limited to the targeted auths. Global plugin rebuilds and
 	// in-flight Antigravity probes can hold authUpdateMu for minutes and stall
 	// Management API PATCH responses.

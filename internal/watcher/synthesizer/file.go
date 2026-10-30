@@ -14,6 +14,7 @@ import (
 
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/auth/codex"
 	kimiauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/kimi"
+	workbuddyauth "github.com/router-for-me/CLIProxyAPI/v8/internal/auth/workbuddy"
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/config"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/pluginapi"
@@ -96,6 +97,8 @@ func synthesizeFileAuths(ctx *SynthesisContext, fullPath string, data []byte) ([
 		}
 		return nil, nil
 	}
+	// Normalize panel-style WorkBuddy credentials before the provider is read.
+	metadata = workbuddyauth.NormalizeAuthFileMetadata(metadata, filepath.Base(fullPath))
 	coreauth.NormalizeCredentialMetadata(metadata)
 	if errWeight := coreauth.ValidateAuthWeight(&coreauth.Auth{Metadata: metadata}); errWeight != nil {
 		return nil, fmt.Errorf("invalid weight in %s: %w", filepath.Base(fullPath), errWeight)
@@ -283,6 +286,11 @@ func synthesizeFileAuths(ctx *SynthesisContext, fullPath string, data []byte) ([
 				a.Attributes["plan_type"] = codex.DefaultPlanType
 			}
 		}
+	}
+	// For WorkBuddy auth files, backfill identity and endpoint attributes from
+	// the normalized metadata.
+	if provider == workbuddyauth.Provider {
+		workbuddyauth.ApplyAuthAttributes(a)
 	}
 	a.BindFileSnapshot(fullPath, data)
 	return []*coreauth.Auth{a}, nil

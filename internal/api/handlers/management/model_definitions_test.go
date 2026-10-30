@@ -75,7 +75,9 @@ func TestGetStaticModelDefinitions_BuiltInChannel(t *testing.T) {
 }
 
 func TestGetStaticModelDefinitions_FallsBackToPluginStaticModels(t *testing.T) {
-	const provider = "workbuddy"
+	// Use a provider name without a built-in static catalog so the handler
+	// exercises the plugin fallback path.
+	const provider = "wbplugin"
 	reg := registry.GetGlobalRegistry()
 	clientID := "workbuddy-cred-1.json"
 	reg.RegisterClient(clientID, provider, []*registry.ModelInfo{
@@ -104,7 +106,7 @@ func TestGetStaticModelDefinitions_FallsBackToPluginStaticModels(t *testing.T) {
 	h := NewHandlerWithoutConfigFilePath(&config.Config{AuthDir: t.TempDir()}, nil)
 	h.SetPluginHost(host)
 
-	rec, body := invokeGetStaticModelDefinitions(t, h, "WorkBuddy")
+	rec, body := invokeGetStaticModelDefinitions(t, h, provider)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
 	}

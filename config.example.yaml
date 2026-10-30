@@ -1164,6 +1164,36 @@ oauth:
     #     - "API"
     #     - "proxy"
 
+# WorkBuddy (CodeBuddy CN) provider and scheduled account tasks.
+workbuddy:
+  # Enable the scheduled account task runner.
+  enabled: false
+
+  # Directory for task state files. Empty means <auth-dir>/workbuddy-state.
+  state-dir: ""
+
+  # Maximum number of accounts processed concurrently. 0 uses the default of 4.
+  workers: 4
+
+  # Timeout for non-chat task requests (for example "30s").
+  request-timeout: "30s"
+
+  # IANA timezone used to evaluate daily task windows.
+  timezone: "Asia/Shanghai"
+
+  # Per-task schedules. A task with no "enabled" key is enabled by default.
+  tasks:
+    checkin:      {enabled: true, daily-at: "08:00"}
+    balance:      {enabled: true, interval: "6h"}
+    keepalive:    {enabled: true, interval: "30m"}
+    report:       {enabled: true, interval: "1h"}
+    growth:       {enabled: true, interval: "6h"}
+    travel:       {enabled: true, interval: "12h"}
+    night-owl:    {enabled: true, daily-at: "01:00"}
+    sweep:        {enabled: true, daily-at: "23:30"}
+    compensation: {enabled: true, daily-at: "09:00"}
+    streak:       {enabled: true, daily-at: "08:10"}
+
 # Image and video behavior.
 multimedia:
   # disable-image-generation supports: false (default), true, "chat", or "passthrough".

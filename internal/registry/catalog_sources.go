@@ -332,6 +332,11 @@ func publishCatalogBytes(data []byte) ([]string, error) {
 	if len(parsed.Meta) == 0 && old != nil {
 		parsed.Meta = old.Meta
 	}
+	// WorkBuddy is a local-only provider that the remote catalog does not
+	// publish; keep the previous section so a refresh cannot drop its models.
+	if len(parsed.WorkBuddy) == 0 && old != nil {
+		parsed.WorkBuddy = old.WorkBuddy
+	}
 	changed := detectChangedProviders(old, &parsed)
 	modelsCatalogStore.mu.Lock()
 	modelsCatalogStore.data = &parsed

@@ -197,6 +197,7 @@ func (s *Service) applyConfigRuntime(ctx context.Context, commit configCommit, s
 	if errContext := ctx.Err(); errContext != nil {
 		return false
 	}
+	s.applyWorkBuddyTaskConfig(ctx, cfg)
 	if !s.applyPprofConfigContext(ctx, cfg) {
 		return false
 	}
