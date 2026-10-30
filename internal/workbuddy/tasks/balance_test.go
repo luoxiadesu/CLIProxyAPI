@@ -1,6 +1,7 @@
 package tasks
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -44,6 +45,23 @@ func TestBalancePersonal(t *testing.T) {
 	}
 	if state.Data["expired_at"] != "2026-12-31 23:59:59" {
 		t.Fatalf("expired_at = %v", state.Data["expired_at"])
+	}
+}
+
+func TestBalanceSnapshotLatestExpiry(t *testing.T) {
+	server := httptest.NewServer(jsonHandler(envelope(`{"Response":{"Data":{"Accounts":[
+		{"CapacityRemain":1,"ExpiredTime":"2026-10-28 10:00:00"},
+		{"CapacityRemain":1,"ExpiredTime":"2026-12-31 23:59:59"}
+	]}}}`)))
+	defer server.Close()
+
+	client := newTestClient(server.URL, server.URL, server.URL, nil)
+	snapshot, errFetch := client.FetchBalance(context.Background())
+	if errFetch != nil {
+		t.Fatalf("fetch balance: %v", errFetch)
+	}
+	if snapshot.ExpiredAt != "2026-12-31 23:59:59" {
+		t.Fatalf("expired_at = %q, want 2026-12-31 23:59:59", snapshot.ExpiredAt)
 	}
 }
 

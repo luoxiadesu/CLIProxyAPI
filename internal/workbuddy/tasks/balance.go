@@ -24,7 +24,7 @@ type BalanceSnapshot struct {
 	// Accounts is the number of personal resource packages. It is zero for
 	// enterprise credentials.
 	Accounts int
-	// ExpiredAt is the first non-empty expiry string reported upstream.
+	// ExpiredAt is the latest non-empty expiry string reported upstream.
 	ExpiredAt string
 }
 
@@ -93,9 +93,7 @@ func (c *Client) FetchBalance(ctx context.Context) (BalanceSnapshot, error) {
 	for _, account := range accounts {
 		snapshot.Credit += account.CapacityRemain
 		snapshot.CycleCredit += account.CycleCapacityRemain
-		if snapshot.ExpiredAt == "" {
-			snapshot.ExpiredAt = firstNonEmpty(account.ExpiredTime, account.PackageEndTime, account.CycleEndTime, formatEpochMillis(account.DeductionEndTime))
-		}
+		snapshot.ExpiredAt = latestExpiry(snapshot.ExpiredAt, firstNonEmpty(account.ExpiredTime, account.PackageEndTime, account.CycleEndTime, formatEpochMillis(account.DeductionEndTime)))
 	}
 	return snapshot, nil
 }
@@ -195,4 +193,41 @@ func formatEpochMillis(value int64) string {
 		return ""
 	}
 	return time.UnixMilli(value).UTC().Format(time.RFC3339)
+}
+
+// expiryLayouts are the timestamp layouts accepted in expiry strings.
+var expiryLayouts = []string{"2006-01-02 15:04:05", time.RFC3339, "2006-01-02"}
+
+// parseExpiryTime parses an expiry string with the supported layouts.
+func parseExpiryTime(value string) (time.Time, bool) {
+	for _, layout := range expiryLayouts {
+		if parsed, errParse := time.Parse(layout, value); errParse == nil {
+			return parsed, true
+		}
+	}
+	return time.Time{}, false
+}
+
+// latestExpiry returns the later of two expiry strings. Parsed timestamps win;
+// unparseable values fall back to lexicographic order.
+func latestExpiry(current, candidate string) string {
+	candidate = strings.TrimSpace(candidate)
+	if candidate == "" {
+		return current
+	}
+	if current == "" {
+		return candidate
+	}
+	currentTime, currentOK := parseExpiryTime(current)
+	candidateTime, candidateOK := parseExpiryTime(candidate)
+	if currentOK && candidateOK {
+		if candidateTime.After(currentTime) {
+			return candidate
+		}
+		return current
+	}
+	if candidate > current {
+		return candidate
+	}
+	return current
 }
