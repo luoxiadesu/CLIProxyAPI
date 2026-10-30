@@ -129,6 +129,62 @@ The task runner is single-instance only. State files are local; do not run
 multiple CLIProxyAPI instances against the same auth directory without external
 coordination.
 
+## Task status
+
+The v8 management API exposes the configured task plan and the persisted state
+for every WorkBuddy account:
+
+```bash
+curl -s 'http://127.0.0.1:8317/v8/management/workbuddy/tasks' \
+  -H "Authorization: Bearer $MANAGEMENT_KEY"
+```
+
+This endpoint exists only under `/v8/management`; there is no legacy
+`/v0/management` equivalent. The response contains:
+
+- `enabled` and `home_enabled`: whether the local task runner is enabled and
+  whether Home mode is active (Home mode owns account state remotely).
+- `state_dir` and `timezone`: the resolved state directory and the configured
+  IANA timezone.
+- `observed_at`: when the response was generated.
+- `tasks`: the fixed plan of ten tasks (`checkin`, `balance`, `keepalive`,
+  `report`, `growth`, `travel`, `night-owl`, `sweep`, `compensation`,
+  `streak`) with `enabled`, `interval`, `daily_at`, and `timeout`.
+- `accounts`: registered WorkBuddy auth records joined with their state files.
+  State files without a matching auth record (and every state file when no auth
+  manager is registered) are returned with `orphan: true`.
+
+Each account carries a `tasks` map keyed by task name. A task entry may contain:
+
+| Field | Meaning |
+| --- | --- |
+| `last_run` | Last attempt time. |
+| `last_window` | Daily window covered by the last run. |
+| `last_status` | `ok` or `error`. |
+| `last_error` | Failure message from the last run. |
+| `next_retry` | Earliest retry instant after a failure. |
+| `consecutive_failures` | Failure count driving the retry backoff. |
+| `data` | Task-specific values written back by the task (for example `credit`). |
+
+`next_retry` is only a retry hint after a failed run; it is not the regular
+schedule. The regular cadence comes from the configured `interval` and
+`daily_at` values in `tasks`. `data` contains only metrics a task persisted for
+itself and never includes credential material.
+
+## Management panel
+
+The official WebUI supports WorkBuddy out of the box: the login page shows a
+device-code card for the OAuth flow, the configuration editor exposes the
+`workbuddy` section, and `/workbuddy/tasks` renders the task status view backed
+by the endpoint above.
+
+To host a custom panel build instead, name the single-file artifact
+`management.html`, place it in a directory, and point `MANAGEMENT_STATIC_PATH`
+at that directory. The server serves the file from there and skips the remote
+asset update. Alternatively, fork the panel repository, publish a release, and
+set `remote-management.panel-github-repository` to the fork so the server
+downloads `management.html` from that release.
+
 ## Limitations
 
 - CN realm only; no international realm or cross-domain fallback.
