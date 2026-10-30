@@ -2,13 +2,9 @@ package cliproxy
 
 import (
 	"context"
-	"fmt"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/router-for-me/CLIProxyAPI/v8/internal/tasks"
-	"github.com/router-for-me/CLIProxyAPI/v8/internal/util"
 	workbuddyTasks "github.com/router-for-me/CLIProxyAPI/v8/internal/workbuddy/tasks"
 	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 	"github.com/router-for-me/CLIProxyAPI/v8/sdk/config"
@@ -150,15 +146,5 @@ func (s *Service) applyWorkBuddyTaskConfig(ctx context.Context, cfg *config.Conf
 // <resolved-auth-dir>/workbuddy-state so state files never land in the auth
 // directory itself, where the watcher would treat them as credentials.
 func workBuddyStateDir(cfg *config.Config) (string, error) {
-	if cfg == nil {
-		return "", fmt.Errorf("nil config")
-	}
-	if dir := strings.TrimSpace(cfg.WorkBuddy.StateDir); dir != "" {
-		return dir, nil
-	}
-	authDir, errResolve := util.ResolveAuthDir(cfg.AuthDir)
-	if errResolve != nil {
-		return "", errResolve
-	}
-	return filepath.Join(authDir, "workbuddy-state"), nil
+	return tasks.ResolveStateDir(cfg)
 }

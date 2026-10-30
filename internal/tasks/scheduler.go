@@ -118,7 +118,7 @@ func NewScheduler(cfg *internalconfig.Config, manager *coreauth.Manager, store S
 		now:        time.Now,
 	}
 	if cfg != nil {
-		if dir, err := resolveStateDir(cfg); err != nil {
+		if dir, err := ResolveStateDir(cfg); err != nil {
 			log.Warnf("workbuddy tasks: resolve state dir: %v", err)
 		} else {
 			s.stateDir = dir
@@ -210,7 +210,7 @@ func (s *Scheduler) ApplyConfig(cfg *internalconfig.Config) {
 	s.cfg = cfg
 	s.timeout = resolveTimeout(cfg)
 	s.loc = resolveLocation(cfg)
-	if dir, err := resolveStateDir(cfg); err != nil {
+	if dir, err := ResolveStateDir(cfg); err != nil {
 		log.Warnf("workbuddy tasks: resolve state dir: %v", err)
 	} else if s.stateDir != "" && dir != s.stateDir {
 		log.Warnf("workbuddy tasks: state-dir changed from %q to %q; restart required to apply", s.stateDir, dir)
@@ -877,9 +877,9 @@ func authUID(auth *coreauth.Auth) string {
 	return ""
 }
 
-// resolveStateDir returns the configured state directory or the default under
+// ResolveStateDir returns the configured state directory or the default under
 // the resolved auth directory.
-func resolveStateDir(cfg *internalconfig.Config) (string, error) {
+func ResolveStateDir(cfg *internalconfig.Config) (string, error) {
 	if cfg == nil {
 		return "", fmt.Errorf("nil config")
 	}

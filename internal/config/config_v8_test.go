@@ -933,3 +933,73 @@ func TestV8SecretHashResolvesReferences(t *testing.T) {
 		})
 	}
 }
+
+func TestV8WorkBuddySectionRoundTrips(t *testing.T) {
+	raw := `config-version: 8
+workbuddy:
+  enabled: true
+  state-dir: /tmp/workbuddy-state
+  workers: 3
+  request-timeout: 45s
+  timezone: UTC
+  tasks:
+    checkin:
+      enabled: false
+      interval: 24h
+      timeout: 30s
+    balance:
+      daily-at: "08:30"
+    night-owl:
+      enabled: true
+      daily-at: "23:30"
+`
+	cfg, err := ParseConfigBytes([]byte(raw))
+	if err != nil {
+		t.Fatalf("parse workbuddy config: %v", err)
+	}
+	assertWorkBuddy := func(t *testing.T, cfg *Config) {
+		t.Helper()
+		wb := cfg.WorkBuddy
+		if !wb.Enabled || wb.StateDir != "/tmp/workbuddy-state" || wb.Workers != 3 || wb.RequestTimeout != "45s" || wb.Timezone != "UTC" {
+			t.Fatalf("unexpected workbuddy config: %+v", wb)
+		}
+		if wb.Tasks.Checkin.Enabled == nil || *wb.Tasks.Checkin.Enabled {
+			t.Fatal("checkin enabled must be explicitly false")
+		}
+		if wb.Tasks.Checkin.Interval != "24h" || wb.Tasks.Checkin.Timeout != "30s" {
+			t.Fatalf("unexpected checkin schedule: %+v", wb.Tasks.Checkin)
+		}
+		if wb.Tasks.Balance.DailyAt != "08:30" || !wb.Tasks.Balance.IsEnabled() {
+			t.Fatalf("unexpected balance schedule: %+v", wb.Tasks.Balance)
+		}
+		if wb.Tasks.NightOwl.DailyAt != "23:30" || !wb.Tasks.NightOwl.IsEnabled() {
+			t.Fatalf("unexpected night-owl schedule: %+v", wb.Tasks.NightOwl)
+		}
+	}
+	assertWorkBuddy(t, cfg)
+
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	if err = os.WriteFile(path, []byte(raw), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err = SaveConfigPreserveComments(path, cfg); err != nil {
+		t.Fatalf("save workbuddy config: %v", err)
+	}
+	reloaded, err := LoadConfig(path)
+	if err != nil {
+		t.Fatalf("reload workbuddy config: %v", err)
+	}
+	assertWorkBuddy(t, reloaded)
+
+	saved, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc yaml.Node
+	if err = yaml.Unmarshal(saved, &doc); err != nil {
+		t.Fatalf("decode saved config: %v", err)
+	}
+	if node := yamlPath(doc.Content[0], "workbuddy"); node == nil {
+		t.Fatal("saved config lost the workbuddy section")
+	}
+}

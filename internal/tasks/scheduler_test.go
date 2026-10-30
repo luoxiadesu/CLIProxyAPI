@@ -3,6 +3,7 @@ package tasks
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -480,4 +481,32 @@ func TestSchedulerDailyWindow(t *testing.T) {
 			t.Fatalf("next run = %s, want %s", taskState.NextRun, wantNext)
 		}
 	})
+}
+
+func TestResolveStateDirConfiguredAndDefault(t *testing.T) {
+	configured := t.TempDir()
+	cfg := testSchedulerConfig(configured, true)
+	dir, err := ResolveStateDir(cfg)
+	if err != nil {
+		t.Fatalf("resolve configured state dir: %v", err)
+	}
+	if dir != configured {
+		t.Fatalf("configured state dir = %q, want %q", dir, configured)
+	}
+
+	authDir := t.TempDir()
+	cfg = testSchedulerConfig("", true)
+	cfg.AuthDir = authDir
+	dir, err = ResolveStateDir(cfg)
+	if err != nil {
+		t.Fatalf("resolve default state dir: %v", err)
+	}
+	want := filepath.Join(authDir, "workbuddy-state")
+	if dir != want {
+		t.Fatalf("default state dir = %q, want %q", dir, want)
+	}
+
+	if _, errNil := ResolveStateDir(nil); errNil == nil {
+		t.Fatal("nil config must fail")
+	}
 }
