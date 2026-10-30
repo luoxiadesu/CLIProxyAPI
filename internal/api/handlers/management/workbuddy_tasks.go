@@ -215,12 +215,23 @@ func workBuddyAuthUID(auth *coreauth.Auth) string {
 }
 
 // workBuddyAuthLabel resolves the display label for a registered auth record.
+// Auth files without an email are labeled with the provider name by the
+// filestore and synthesizer, so that value is treated as unset. Only the
+// nickname, uid, and id are consulted; no other metadata is read.
 func workBuddyAuthLabel(auth *coreauth.Auth, uid string) string {
 	if auth == nil {
 		return uid
 	}
-	if label := strings.TrimSpace(auth.Label); label != "" {
+	label := strings.TrimSpace(auth.Label)
+	if label != "" && !strings.EqualFold(label, workbuddyauth.Provider) {
 		return label
+	}
+	if auth.Metadata != nil {
+		if nickname, ok := auth.Metadata["nickname"].(string); ok {
+			if nickname = strings.TrimSpace(nickname); nickname != "" {
+				return nickname
+			}
+		}
 	}
 	if uid != "" {
 		return uid

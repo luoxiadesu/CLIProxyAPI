@@ -314,3 +314,48 @@ func TestListWorkBuddyTasksNilHandler(t *testing.T) {
 		t.Fatalf("status = %d, want 500", recorder.Code)
 	}
 }
+
+func TestListWorkBuddyTasksLabelFallback(t *testing.T) {
+	manager := coreauth.NewManager(nil, nil, nil)
+	registerWorkBuddyTestAuth(t, manager, &coreauth.Auth{
+		ID:         "nick",
+		Provider:   workbuddyauth.Provider,
+		Label:      workbuddyauth.Provider,
+		Attributes: map[string]string{"uid": "uid-nick"},
+		Metadata:   map[string]any{"nickname": "Alice", "access_token": "secret-access"},
+	})
+	registerWorkBuddyTestAuth(t, manager, &coreauth.Auth{
+		ID:         "plain",
+		Provider:   workbuddyauth.Provider,
+		Label:      "WORKBUDDY",
+		Attributes: map[string]string{"uid": "uid-plain"},
+		Metadata:   map[string]any{"access_token": "secret-access-plain"},
+	})
+
+	cfg := &config.Config{WorkBuddy: config.WorkBuddyConfig{Enabled: true, StateDir: t.TempDir()}}
+	h := NewHandlerWithoutConfigFilePath(cfg, manager)
+	recorder, response := callListWorkBuddyTasks(t, h)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %s)", recorder.Code, recorder.Body.String())
+	}
+
+	nick, ok := findWorkBuddyAccount(response.Accounts, "nick")
+	if !ok {
+		t.Fatal("missing nick account")
+	}
+	if nick.Label != "Alice" {
+		t.Fatalf("nick label = %q, want Alice", nick.Label)
+	}
+	plain, ok := findWorkBuddyAccount(response.Accounts, "plain")
+	if !ok {
+		t.Fatal("missing plain account")
+	}
+	if plain.Label != "uid-plain" {
+		t.Fatalf("plain label = %q, want uid-plain", plain.Label)
+	}
+
+	body := recorder.Body.String()
+	if strings.Contains(body, "secret-access") {
+		t.Fatalf("response leaked credential metadata: %s", body)
+	}
+}
