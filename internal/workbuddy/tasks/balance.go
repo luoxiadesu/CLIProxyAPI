@@ -12,6 +12,31 @@ import (
 	coreauth "github.com/router-for-me/CLIProxyAPI/v8/sdk/cliproxy/auth"
 )
 
+// BalanceSnapshot is a read-only view of the account resource balance.
+type BalanceSnapshot struct {
+	// Enterprise reports whether the credential belongs to an enterprise tenant.
+	Enterprise bool
+	// Credit is the summed personal capacity remainder or the enterprise credit.
+	Credit float64
+	// CycleCredit is the summed personal cycle capacity remainder. It is zero
+	// for enterprise credentials.
+	CycleCredit float64
+	// Accounts is the number of personal resource packages. It is zero for
+	// enterprise credentials.
+	Accounts int
+	// ExpiredAt is the first non-empty expiry string reported upstream.
+	ExpiredAt string
+}
+
+// enterpriseUsage is the enterprise usage payload.
+type enterpriseUsage struct {
+	Credit         float64 `json:"credit"`
+	LimitNum       float64 `json:"limitNum"`
+	UsedNum        float64 `json:"used_num"`
+	CycleEndTime   string  `json:"cycleEndTime"`
+	CycleResetTime string  `json:"cycleResetTime"`
+}
+
 // balanceTask refreshes the account resource balance. It only writes task state;
 // it never touches the auth file.
 type balanceTask struct {
@@ -45,9 +70,39 @@ func (t *balanceTask) Run(ctx context.Context, auth *coreauth.Auth) error {
 	return t.runPersonal(ctx, client)
 }
 
-// runPersonal queries the personal resource endpoint.
-func (t *balanceTask) runPersonal(ctx context.Context, client *Client) error {
-	now := client.nowTime().In(client.location())
+// FetchBalance queries the personal or enterprise balance endpoint and returns
+// a snapshot. It never writes task state, so callers outside the scheduler can
+// use it directly.
+func (c *Client) FetchBalance(ctx context.Context) (BalanceSnapshot, error) {
+	if c.IsEnterprise() {
+		usage, errUsage := c.fetchEnterpriseUsage(ctx)
+		if errUsage != nil {
+			return BalanceSnapshot{}, errUsage
+		}
+		return BalanceSnapshot{
+			Enterprise: true,
+			Credit:     usage.Credit,
+			ExpiredAt:  firstNonEmpty(usage.CycleEndTime, usage.CycleResetTime),
+		}, nil
+	}
+	accounts, errAccounts := c.fetchPersonalAccounts(ctx)
+	if errAccounts != nil {
+		return BalanceSnapshot{}, errAccounts
+	}
+	snapshot := BalanceSnapshot{Accounts: len(accounts)}
+	for _, account := range accounts {
+		snapshot.Credit += account.CapacityRemain
+		snapshot.CycleCredit += account.CycleCapacityRemain
+		if snapshot.ExpiredAt == "" {
+			snapshot.ExpiredAt = firstNonEmpty(account.ExpiredTime, account.PackageEndTime, account.CycleEndTime, formatEpochMillis(account.DeductionEndTime))
+		}
+	}
+	return snapshot, nil
+}
+
+// fetchPersonalAccounts queries the personal resource endpoint.
+func (c *Client) fetchPersonalAccounts(ctx context.Context) ([]personalResourceAccount, error) {
+	now := c.nowTime().In(c.location())
 	body := map[string]any{
 		"PageNumber":               1,
 		"PageSize":                 100,
@@ -56,9 +111,9 @@ func (t *balanceTask) runPersonal(ctx context.Context, client *Client) error {
 		"PackageEndTimeRangeBegin": now.Format("2006-01-02 15:04:05"),
 		"PackageEndTimeRangeEnd":   now.AddDate(101, 0, 0).Format("2006-01-02 15:04:05"),
 	}
-	raw, errPost := client.PostJSON(ctx, domainBilling, pathUserResource, client.billingHeaders(), body)
+	raw, errPost := c.PostJSON(ctx, domainBilling, pathUserResource, c.billingHeaders(), body)
 	if errPost != nil {
-		return fmt.Errorf("workbuddy balance: personal resource: %w", errPost)
+		return nil, fmt.Errorf("workbuddy balance: personal resource: %w", errPost)
 	}
 	var payload struct {
 		Response struct {
@@ -69,55 +124,57 @@ func (t *balanceTask) runPersonal(ctx context.Context, client *Client) error {
 	}
 	if len(raw) > 0 {
 		if errUnmarshal := json.Unmarshal(raw, &payload); errUnmarshal != nil {
-			return fmt.Errorf("workbuddy balance: parse personal resource: %w", errUnmarshal)
+			return nil, fmt.Errorf("workbuddy balance: parse personal resource: %w", errUnmarshal)
 		}
 	}
-	accounts := payload.Response.Data.Accounts
-	var capacityRemain, cycleRemain float64
-	var expiredAt string
-	for _, account := range accounts {
-		capacityRemain += account.CapacityRemain
-		cycleRemain += account.CycleCapacityRemain
-		if expiredAt == "" {
-			expiredAt = firstNonEmpty(account.ExpiredTime, account.PackageEndTime, account.CycleEndTime, formatEpochMillis(account.DeductionEndTime))
+	return payload.Response.Data.Accounts, nil
+}
+
+// fetchEnterpriseUsage queries the enterprise usage endpoint.
+func (c *Client) fetchEnterpriseUsage(ctx context.Context) (enterpriseUsage, error) {
+	raw, errPost := c.PostJSON(ctx, domainBilling, pathEnterpriseUsage, c.billingHeaders(), map[string]any{})
+	if errPost != nil {
+		return enterpriseUsage{}, fmt.Errorf("workbuddy balance: enterprise usage: %w", errPost)
+	}
+	var payload enterpriseUsage
+	if len(raw) > 0 {
+		if errUnmarshal := json.Unmarshal(raw, &payload); errUnmarshal != nil {
+			return enterpriseUsage{}, fmt.Errorf("workbuddy balance: parse enterprise usage: %w", errUnmarshal)
 		}
+	}
+	return payload, nil
+}
+
+// runPersonal writes the personal balance into the task state.
+func (t *balanceTask) runPersonal(ctx context.Context, client *Client) error {
+	snapshot, errFetch := client.FetchBalance(ctx)
+	if errFetch != nil {
+		return errFetch
 	}
 	state := taskState(ctx)
-	setStateValue(state, "credit", capacityRemain)
-	setStateValue(state, "capacity_remain", capacityRemain)
-	setStateValue(state, "cycle_capacity_remain", cycleRemain)
-	setStateValue(state, "accounts", len(accounts))
-	setStateValue(state, "expired_at", expiredAt)
+	setStateValue(state, "credit", snapshot.Credit)
+	setStateValue(state, "capacity_remain", snapshot.Credit)
+	setStateValue(state, "cycle_capacity_remain", snapshot.CycleCredit)
+	setStateValue(state, "accounts", snapshot.Accounts)
+	setStateValue(state, "expired_at", snapshot.ExpiredAt)
 	setStateValue(state, "updated_at", time.Now().UTC().Format(time.RFC3339))
 	return nil
 }
 
-// runEnterprise queries the enterprise usage endpoint.
+// runEnterprise writes the enterprise usage into the task state.
 func (t *balanceTask) runEnterprise(ctx context.Context, client *Client) error {
-	raw, errPost := client.PostJSON(ctx, domainBilling, pathEnterpriseUsage, client.billingHeaders(), map[string]any{})
-	if errPost != nil {
-		return fmt.Errorf("workbuddy balance: enterprise usage: %w", errPost)
+	usage, errUsage := client.fetchEnterpriseUsage(ctx)
+	if errUsage != nil {
+		return errUsage
 	}
-	var payload struct {
-		Credit         float64 `json:"credit"`
-		LimitNum       float64 `json:"limitNum"`
-		UsedNum        float64 `json:"used_num"`
-		CycleEndTime   string  `json:"cycleEndTime"`
-		CycleResetTime string  `json:"cycleResetTime"`
-	}
-	if len(raw) > 0 {
-		if errUnmarshal := json.Unmarshal(raw, &payload); errUnmarshal != nil {
-			return fmt.Errorf("workbuddy balance: parse enterprise usage: %w", errUnmarshal)
-		}
-	}
-	remaining := payload.LimitNum - payload.Credit
+	remaining := usage.LimitNum - usage.Credit
 	state := taskState(ctx)
-	setStateValue(state, "credit", payload.Credit)
-	setStateValue(state, "limit", payload.LimitNum)
-	setStateValue(state, "used", payload.UsedNum)
+	setStateValue(state, "credit", usage.Credit)
+	setStateValue(state, "limit", usage.LimitNum)
+	setStateValue(state, "used", usage.UsedNum)
 	setStateValue(state, "remaining", remaining)
-	setStateValue(state, "cycle_end", payload.CycleEndTime)
-	setStateValue(state, "cycle_reset", payload.CycleResetTime)
+	setStateValue(state, "cycle_end", usage.CycleEndTime)
+	setStateValue(state, "cycle_reset", usage.CycleResetTime)
 	setStateValue(state, "updated_at", time.Now().UTC().Format(time.RFC3339))
 	return nil
 }
