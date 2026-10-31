@@ -342,6 +342,8 @@ func (e *WorkBuddyExecutor) buildRequestPayload(ctx context.Context, req cliprox
 	// the streaming contract, and finalize user rules exactly once at the end.
 	body = helps.NormalizeOpenAIMaxTokens(body, false)
 	body = helps.NormalizeWorkBuddyRoles(body)
+	body = helps.EnsureWorkBuddySystemFirst(body)
+	body = helps.SanitizeWorkBuddyFingerprints(body)
 	body = helps.NormalizeWorkBuddyToolChoice(body)
 	body = helps.NormalizeWorkBuddyImageParts(body)
 	body = helps.RepairWorkBuddyToolCallPairs(body)

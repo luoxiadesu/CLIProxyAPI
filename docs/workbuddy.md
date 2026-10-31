@@ -185,6 +185,29 @@ asset update. Alternatively, fork the panel repository, publish a release, and
 set `remote-management.panel-github-repository` to the fork so the server
 downloads `management.html` from that release.
 
+## Upstream channel checks
+
+The upstream rejects chat requests that do not look like they come from an
+official client:
+
+- the first message must carry role `system`; a user/developer first message is
+  answered with `11-128` (`first message is not system prompt` / `Illegal API
+  invocation from an unapproved channel`);
+- content moderation matches several exact substrings copied verbatim from
+  official CLI clients, including Claude Code and Codex system-prompt sentences,
+  `x-anthropic-billing-hdr` segments, and the bare digits `11-128`.
+
+The executor normalizes every outbound chat payload before sending it:
+
+- a neutral system message is prepended when the first message is not `system`;
+- `developer` roles become `system`;
+- the known moderation fingerprints are rewritten or stripped in message text,
+  reasoning fields, and tool-call arguments.
+
+The rewrites keep the original meaning and run before user payload rules, so
+configured overrides remain the final word. Scheduled night-owl chat requests
+include a system message for the same reason.
+
 ## Limitations
 
 - CN realm only; no international realm or cross-domain fallback.

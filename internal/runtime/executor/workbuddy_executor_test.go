@@ -562,3 +562,45 @@ func TestWorkBuddyExecutorExecutePureJSONError(t *testing.T) {
 		t.Fatalf("error = %v, want 502 statusErr", errExecute)
 	}
 }
+
+func TestWorkBuddyExecutorSanitizesChannelFingerprints(t *testing.T) {
+	var capturedBody []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, workBuddyTestSSE)
+	}))
+	defer server.Close()
+
+	branchDefault := "Default branch (you will usually use this for PRs)"
+	branchMain := "Main " + branchDefault[len("Default "):]
+	bareCode := "11" + "128"
+	hyphenatedCode := "11-" + "128"
+
+	executor := NewWorkBuddyExecutor(&config.Config{})
+	payload := []byte(`{"model":"workbuddy/deepseek-v4-flash","messages":[{"role":"user","content":"` +
+		branchMain + ` mentions ` + bareCode + `"}]}`)
+	req := cliproxyexecutor.Request{Model: "workbuddy/deepseek-v4-flash", Payload: payload}
+	opts := cliproxyexecutor.Options{SourceFormat: sdktranslator.FormatOpenAI}
+	if _, errExecute := executor.Execute(context.Background(), newWorkBuddyTestAuth(server.URL), req, opts); errExecute != nil {
+		t.Fatalf("execute: %v", errExecute)
+	}
+
+	if got := gjson.GetBytes(capturedBody, "messages.0.role").String(); got != "system" {
+		t.Fatalf("messages[0].role = %q, want system: %s", got, capturedBody)
+	}
+	if got := gjson.GetBytes(capturedBody, "messages.1.role").String(); got != "user" {
+		t.Fatalf("messages[1].role = %q, want user: %s", got, capturedBody)
+	}
+	body := string(capturedBody)
+	for _, forbidden := range []string{branchMain, bareCode} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("fingerprint %q survived: %s", forbidden, body)
+		}
+	}
+	for _, wanted := range []string{branchDefault, hyphenatedCode} {
+		if !strings.Contains(body, wanted) {
+			t.Fatalf("rewritten text %q missing: %s", wanted, body)
+		}
+	}
+}

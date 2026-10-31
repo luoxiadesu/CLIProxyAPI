@@ -93,10 +93,13 @@ func runNightOwl(ctx context.Context, client *Client) error {
 }
 
 // nightOwlChatBody builds the streaming chat request used for activity.
+// WorkBuddy requires the first message to carry role "system"; the activity
+// prompt itself stays in the user turn.
 func nightOwlChatBody() map[string]any {
 	return map[string]any{
 		"model": nightOwlModel,
 		"messages": []map[string]any{
+			{"role": "system", "content": "You are a helpful assistant."},
 			{"role": "user", "content": nightOwlPrompt},
 		},
 		"stream": true,

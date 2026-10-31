@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -70,6 +71,10 @@ func TestNightOwlSendsMessages(t *testing.T) {
 	}
 	if len(chatRequests) == 0 {
 		t.Fatal("chat requests missing")
+	}
+	chatBody := string(chatRequests[0].Body)
+	if !strings.Contains(chatBody, `"role":"system"`) {
+		t.Fatalf("first chat message must be system: %s", chatBody)
 	}
 	chatHeaders := chatRequests[0].Headers
 	if got := chatHeaders.Get("Accept"); got != "application/json, text/event-stream" {
